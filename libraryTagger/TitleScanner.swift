@@ -14,14 +14,18 @@ struct TitleScanner {
         let title = song.title
 
         // 1. Artist name embedded in title (min 3 chars to avoid false positives)
+        // Skip if the title IS the artist name (self-titled tracks)
         if song.artistName.count >= 3,
-           title.localizedCaseInsensitiveContains(song.artistName) {
+           title.localizedCaseInsensitiveContains(song.artistName),
+           title.localizedCaseInsensitiveCompare(song.artistName) != .orderedSame {
             issues.append(.artistNameInTitle)
         }
 
         // 2. Album name embedded in title (min 3 chars)
+        // Skip if the title IS the album name (title tracks like "...And Justice for All")
         if let album = song.albumTitle, album.count >= 3,
-           title.localizedCaseInsensitiveContains(album) {
+           title.localizedCaseInsensitiveContains(album),
+           title.localizedCaseInsensitiveCompare(album) != .orderedSame {
             issues.append(.albumNameInTitle)
         }
 
@@ -42,21 +46,42 @@ struct TitleScanner {
             issues.append(.suspiciousParentheses)
         }
 
-        // 6. File extensions in the title
+        // 6. Bare "Feat."/"Ft."/"featuring" not inside parentheses
+        let featuringPattern = #"(?<!\()\b(feat\.?|ft\.?|featuring)\b"#
+        if title.range(of: featuringPattern,
+                       options: [.regularExpression, .caseInsensitive]) != nil {
+            issues.append(.featuringArtist)
+        }
+
+        // 7. File extensions in the title
         let extensionPattern = #"\.(mp3|flac|wav|aac|ogg|m4a|aiff|wma)\b"#
         if title.range(of: extensionPattern,
                        options: [.regularExpression, .caseInsensitive]) != nil {
             issues.append(.fileExtension)
         }
 
-        // 7. Dash separator patterns suggesting concatenated fields (" - " or "_-_")
+        // 8. Dash separator patterns suggesting concatenated fields (" - " or "_-_")
         if title.range(of: #"(\s-\s|_-_)"#, options: .regularExpression) != nil {
             issues.append(.dashSeparator)
         }
 
-        // 8. Leading track number (e.g., "01 -", "01.", "03 ")
+        // 9. Leading track number (e.g., "01 -", "01.", "03 ")
         if title.range(of: #"^\d{1,3}[\.\s\-]"#, options: .regularExpression) != nil {
             issues.append(.leadingTrackNumber)
+        }
+
+        // 10. Scene release naming: "NN-artist-title[-group]" format.
+        //     Bare hyphens as field separators with either underscores or single words.
+        //     Detected when: starts with NN- (digit-hyphen, no space) and has 2+ segments.
+        //     (2 segments = artist-title, 3+ = artist-title-group)
+        if title.range(of: #"^\d{1,3}-[^\s]"#, options: .regularExpression) != nil {
+            let stripped = title.replacingOccurrences(
+                of: #"^\d{1,3}-"#, with: "", options: .regularExpression
+            )
+            let segments = stripped.components(separatedBy: "-")
+            if segments.count >= 2 {
+                issues.append(.sceneRelease)
+            }
         }
 
         return issues

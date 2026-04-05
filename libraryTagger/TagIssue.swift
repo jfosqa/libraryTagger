@@ -17,6 +17,8 @@ enum TagIssue: String, CaseIterable, Identifiable {
     case fileExtension       = "File Extension"
     case dashSeparator       = "Dash Separator"
     case leadingTrackNumber  = "Track Number"
+    case featuringArtist     = "Featuring Artist"
+    case sceneRelease        = "Scene Release"
 
     var id: String { rawValue }
 }
@@ -37,7 +39,7 @@ extension TagIssue {
             return .orange
         case .underscoresAsSpaces, .dashSeparator, .leadingTrackNumber, .fileExtension:
             return .red
-        case .squareBracketContent, .suspiciousParentheses:
+        case .squareBracketContent, .suspiciousParentheses, .featuringArtist, .sceneRelease:
             return .purple
         }
     }

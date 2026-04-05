@@ -31,6 +31,7 @@ struct ContentView: View {
     @State private var isScanning = false
     @State private var totalSongsScanned = 0
     @State private var maxSongs = 0
+    @State private var correctedIDs: Set<MusicItemID> = []
 
     private let maxSongsOptions = [0, 50, 100, 250, 500, 1000]
 
@@ -79,11 +80,13 @@ struct ContentView: View {
                 } else {
                     List(scanResults) { result in
                         NavigationLink(value: result) {
-                            ScanResultRow(result: result)
+                            ScanResultRow(result: result, isCorrected: correctedIDs.contains(result.id))
                         }
                     }
                     .navigationDestination(for: ScanResult.self) { result in
-                        SongDetailView(result: result)
+                        SongDetailView(result: result, allScanResults: scanResults) { ids in
+                            correctedIDs.formUnion(ids)
+                        }
                     }
                 }
             }

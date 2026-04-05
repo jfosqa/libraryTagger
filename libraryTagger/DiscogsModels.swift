@@ -68,6 +68,13 @@ struct DiscogsTrack: Codable, Identifiable {
     let position: String
     let title: String
     let duration: String
+    var artists: [DiscogsArtist]? = nil
 
     var id: String { position + title }
+
+    /// The track-level artist name, if specified (for split/compilation releases).
+    var artistName: String? {
+        guard let artists, !artists.isEmpty else { return nil }
+        return artists.map { $0.name }.joined(separator: " / ")
+    }
 }
