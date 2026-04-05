@@ -101,4 +101,17 @@ struct TitleScanner {
             )
         }
     }
+
+    /// Scan an array of songs, returning ALL as ScanResults (including those with no issues).
+    static func scanAllIncludingClean(_ songs: [Song]) -> [ScanResult] {
+        songs.map { song in
+            ScanResult(
+                id: song.id,
+                title: song.title,
+                artistName: song.artistName,
+                albumTitle: song.albumTitle,
+                issues: scan(song)
+            )
+        }
+    }
 }

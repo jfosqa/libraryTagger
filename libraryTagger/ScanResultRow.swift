@@ -29,15 +29,26 @@ struct ScanResultRow: View {
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 4) {
-                ForEach(result.issues) { issue in
-                    Text(issue.rawValue)
+                if result.issues.isEmpty {
+                    Text("No Issues")
                         .font(.caption2)
                         .fontWeight(.medium)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(issue.color.opacity(0.15))
-                        .foregroundStyle(issue.color)
+                        .background(Color.green.opacity(0.15))
+                        .foregroundStyle(.green)
                         .clipShape(Capsule())
+                } else {
+                    ForEach(result.issues) { issue in
+                        Text(issue.rawValue)
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(issue.color.opacity(0.15))
+                            .foregroundStyle(issue.color)
+                            .clipShape(Capsule())
+                    }
                 }
             }
         }

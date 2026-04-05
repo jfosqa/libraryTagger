@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		494E6C6F2F80B2EC00EB1FB9 /* DOCUMENTATION.md in Resources */ = {isa = PBXBuildFile; fileRef = 494E6C6E2F80B2EC00EB1FB9 /* DOCUMENTATION.md */; };
+		494E6C712F81F9AC00EB1FB9 /* requirements.md in Resources */ = {isa = PBXBuildFile; fileRef = 494E6C702F81F99D00EB1FB9 /* requirements.md */; };
+		494E6C732F82007C00EB1FB9 /* DirectedSearchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 494E6C722F82007C00EB1FB9 /* DirectedSearchSheet.swift */; };
+		49B143012F82F12A005AC8D8 /* bugs.md in Resources */ = {isa = PBXBuildFile; fileRef = 49B143002F82F122005AC8D8 /* bugs.md */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -29,6 +32,9 @@
 
 /* Begin PBXFileReference section */
 		494E6C6E2F80B2EC00EB1FB9 /* DOCUMENTATION.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = DOCUMENTATION.md; sourceTree = "<group>"; };
+		494E6C702F81F99D00EB1FB9 /* requirements.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = requirements.md; sourceTree = "<group>"; };
+		494E6C722F82007C00EB1FB9 /* DirectedSearchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectedSearchSheet.swift; sourceTree = "<group>"; };
+		49B143002F82F122005AC8D8 /* bugs.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = bugs.md; sourceTree = "<group>"; };
 		49B41AE32F6863A8006D6794 /* libraryTagger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = libraryTagger.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		49B41AF52F6863A9006D6794 /* libraryTaggerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = libraryTaggerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		49B41AFF2F6863A9006D6794 /* libraryTaggerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = libraryTaggerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -80,11 +86,14 @@
 		49B41ADA2F6863A8006D6794 = {
 			isa = PBXGroup;
 			children = (
+				494E6C702F81F99D00EB1FB9 /* requirements.md */,
+				49B143002F82F122005AC8D8 /* bugs.md */,
 				49B41AE52F6863A8006D6794 /* libraryTagger */,
 				49B41AF82F6863A9006D6794 /* libraryTaggerTests */,
 				49B41B022F6863A9006D6794 /* libraryTaggerUITests */,
 				49B41AE42F6863A8006D6794 /* Products */,
 				494E6C6E2F80B2EC00EB1FB9 /* DOCUMENTATION.md */,
+				494E6C722F82007C00EB1FB9 /* DirectedSearchSheet.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -218,7 +227,9 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				494E6C712F81F9AC00EB1FB9 /* requirements.md in Resources */,
 				494E6C6F2F80B2EC00EB1FB9 /* DOCUMENTATION.md in Resources */,
+				49B143012F82F12A005AC8D8 /* bugs.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -243,6 +254,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				494E6C732F82007C00EB1FB9 /* DirectedSearchSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -675,3 +675,722 @@ struct AlbumBatchCorrectionTests {
     }
 }
 
+// MARK: - Directed Search Tests
+
+@Suite("Directed Search")
+struct DirectedSearchTests {
+
+    // MARK: - SearchFilter Tests
+
+    @Test func searchFilterDefaultsToArtistField() {
+        let filter = SearchFilter()
+        #expect(filter.field == .artist)
+        #expect(filter.text == "")
+    }
+
+    @Test func searchFilterHasUniqueIDs() {
+        let filter1 = SearchFilter()
+        let filter2 = SearchFilter()
+        #expect(filter1.id != filter2.id)
+    }
+
+    // MARK: - ScanResult with empty issues
+
+    @Test func scanResultAcceptsEmptyIssues() {
+        let result = ScanResult(
+            id: MusicItemID("test-1"),
+            title: "Clean Song",
+            artistName: "Good Artist",
+            albumTitle: "Nice Album",
+            issues: []
+        )
+        #expect(result.issues.isEmpty)
+        #expect(result.title == "Clean Song")
+        #expect(result.artistName == "Good Artist")
+        #expect(result.albumTitle == "Nice Album")
+    }
+
+    @Test func scanResultWithEmptyIssuesIsHashable() {
+        let result1 = ScanResult(
+            id: MusicItemID("test-1"),
+            title: "Song",
+            artistName: "Artist",
+            albumTitle: nil,
+            issues: []
+        )
+        let result2 = ScanResult(
+            id: MusicItemID("test-2"),
+            title: "Song 2",
+            artistName: "Artist",
+            albumTitle: nil,
+            issues: [.dashSeparator]
+        )
+        let set: Set<ScanResult> = [result1, result2]
+        #expect(set.count == 2)
+    }
+
+    // MARK: - SongDetailViewModel with clean song
+
+    @Test func viewModelWithCleanSongHasNoCleanedCorrection() {
+        let scan = ScanResult(
+            id: MusicItemID("clean-1"),
+            title: "Perfect Title",
+            artistName: "Perfect Artist",
+            albumTitle: "Perfect Album",
+            issues: []
+        )
+        let vm = SongDetailViewModel(scanResult: scan)
+        #expect(vm.cleanedCorrection == nil)
+        #expect(vm.cleanedTitle == "Perfect Title")
+        #expect(vm.parsedArtist == nil)
+    }
+
+    @Test func viewModelWithCleanSongSearchesDiscogs() {
+        // A clean song should still have a cleaned title for Discogs search
+        let scan = ScanResult(
+            id: MusicItemID("clean-1"),
+            title: "Some Track",
+            artistName: "Some Artist",
+            albumTitle: "Some Album",
+            issues: []
+        )
+        let vm = SongDetailViewModel(scanResult: scan)
+        // cleanedTitle falls through to original title when no issues
+        #expect(vm.cleanedTitle == "Some Track")
+    }
+
+    // MARK: - Filter validation logic
+
+    @Test func activeFiltersSkipEmptyText() {
+        let filters = [
+            SearchFilter(field: .artist, text: "Dillinja"),
+            SearchFilter(field: .album, text: ""),
+            SearchFilter(field: .name, text: "  ")
+        ]
+        let active = filters
+            .filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }
+            .map { (field: $0.field, text: $0.text.trimmingCharacters(in: .whitespaces)) }
+        #expect(active.count == 1)
+        #expect(active[0].field == .artist)
+        #expect(active[0].text == "Dillinja")
+    }
+
+    @Test func activeFiltersTrimsWhitespace() {
+        let filters = [
+            SearchFilter(field: .name, text: "  Some Track  ")
+        ]
+        let active = filters
+            .filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }
+            .map { (field: $0.field, text: $0.text.trimmingCharacters(in: .whitespaces)) }
+        #expect(active.count == 1)
+        #expect(active[0].text == "Some Track")
+    }
+
+    @Test func activeFiltersPreservesMultipleValidFilters() {
+        let filters = [
+            SearchFilter(field: .artist, text: "Noisia"),
+            SearchFilter(field: .album, text: "Split The Atom"),
+            SearchFilter(field: .genre, text: "Drum & Bass")
+        ]
+        let active = filters
+            .filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }
+        #expect(active.count == 3)
+    }
+
+    @Test func noActiveFiltersWhenAllEmpty() {
+        let filters = [
+            SearchFilter(field: .artist, text: ""),
+            SearchFilter(field: .album, text: "   ")
+        ]
+        let active = filters
+            .filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }
+        #expect(active.isEmpty)
+    }
+}
+
+// MARK: - DirectedSearchFilter Tests
+
+@Suite("DirectedSearchFilter")
+struct DirectedSearchFilterTests {
+
+    // MARK: - Test Helpers
+
+    private func makeScanResult(
+        id: String = "1",
+        title: String = "Some Title",
+        artist: String = "Some Artist",
+        album: String? = "Some Album",
+        issues: [TagIssue] = []
+    ) -> ScanResult {
+        ScanResult(
+            id: MusicItemID(id),
+            title: title,
+            artistName: artist,
+            albumTitle: album,
+            issues: issues
+        )
+    }
+
+    // MARK: - Name filter tests
+
+    @Test func nameContainsSubstringInHyphenatedTitle() {
+        let results = [
+            makeScanResult(id: "1", title: "02-ice_minus-monk_fish-skotch"),
+            makeScanResult(id: "2", title: "Some Other Song")
+        ]
+        let filtered = DirectedSearchFilter.apply(
+            results,
+            filters: [(field: .name, text: "monk")]
+        )
+        #expect(filtered.count == 1)
+        #expect(filtered.first?.title == "02-ice_minus-monk_fish-skotch")
+    }
+
+    // MARK: - Artist filter tests
+
+    @Test func artistContainsSubstringInMultiWordArtist() {
+        let results = [
+            makeScanResult(id: "1", artist: "DJ Hazard"),
+            makeScanResult(id: "2", artist: "Some Other Artist")
+        ]
+        let filtered = DirectedSearchFilter.apply(
+            results,
+            filters: [(field: .artist, text: "Hazard")]
+        )
+        #expect(filtered.count == 1)
+        #expect(filtered.first?.artistName == "DJ Hazard")
+    }
+
+    // MARK: - Case insensitivity
+
+    @Test func filterIsCaseInsensitive() {
+        let results = [
+            makeScanResult(id: "1", title: "02-ice_minus-monk_fish-skotch")
+        ]
+        let filtered = DirectedSearchFilter.apply(
+            results,
+            filters: [(field: .name, text: "MONK")]
+        )
+        #expect(filtered.count == 1)
+    }
+
+    // MARK: - Album filter
+
+    @Test func filterByAlbumSubstring() {
+        let results = [
+            makeScanResult(id: "1", album: "Smooth Jazz Hits"),
+            makeScanResult(id: "2", album: "Rock Classics")
+        ]
+        let filtered = DirectedSearchFilter.apply(
+            results,
+            filters: [(field: .album, text: "jazz")]
+        )
+        #expect(filtered.count == 1)
+        #expect(filtered.first?.albumTitle == "Smooth Jazz Hits")
+    }
+
+    // MARK: - Multiple filters (AND logic)
+
+    @Test func multipleFiltersApplyAsAND() {
+        let results = [
+            makeScanResult(id: "1", title: "monk_fish", artist: "DJ Hazard"),
+            makeScanResult(id: "2", title: "monk_fish", artist: "Other Artist"),
+            makeScanResult(id: "3", title: "Other Song", artist: "DJ Hazard")
+        ]
+        let filtered = DirectedSearchFilter.apply(
+            results,
+            filters: [
+                (field: .name, text: "monk"),
+                (field: .artist, text: "Hazard")
+            ]
+        )
+        #expect(filtered.count == 1)
+        #expect(filtered.first?.id == MusicItemID("1"))
+    }
+
+    // MARK: - No match
+
+    @Test func noMatchReturnsEmpty() {
+        let results = [
+            makeScanResult(id: "1", artist: "DJ Hazard"),
+            makeScanResult(id: "2", artist: "Some Other Artist")
+        ]
+        let filtered = DirectedSearchFilter.apply(
+            results,
+            filters: [(field: .artist, text: "Nonexistent")]
+        )
+        #expect(filtered.isEmpty)
+    }
+
+    // MARK: - Empty filter text is skipped
+
+    @Test func emptyFilterTextIsSkipped() {
+        let results = [
+            makeScanResult(id: "1", title: "Song A"),
+            makeScanResult(id: "2", title: "Song B")
+        ]
+        let filtered = DirectedSearchFilter.apply(
+            results,
+            filters: [(field: .name, text: "")]
+        )
+        #expect(filtered.count == 2)
+    }
+}
+
+// MARK: - WildcardMatcher Tests
+
+@Suite("WildcardMatcher")
+struct WildcardMatcherTests {
+
+    // MARK: No wildcard — substring match
+
+    @Test func noWildcardIsSubstringMatch() {
+        #expect(WildcardMatcher.matches(text: "DJ Hazard", pattern: "Hazard"))
+    }
+
+    @Test func noWildcardIsCaseInsensitive() {
+        #expect(WildcardMatcher.matches(text: "DJ Hazard", pattern: "hazard"))
+    }
+
+    @Test func noWildcardMatchesAnywhere() {
+        #expect(WildcardMatcher.matches(text: "DJ Hazard", pattern: "J Ha"))
+    }
+
+    // MARK: Single wildcard
+
+    @Test func leadingWildcardMatchesSuffix() {
+        #expect(WildcardMatcher.matches(text: "VIP Remix", pattern: "*Remix"))
+    }
+
+    @Test func trailingWildcardMatchesPrefix() {
+        #expect(WildcardMatcher.matches(text: "DJ Hazard", pattern: "DJ*"))
+    }
+
+    @Test func middleWildcardMatchesBothEnds() {
+        #expect(WildcardMatcher.matches(text: "DJ Drum and Bass", pattern: "DJ*Bass"))
+    }
+
+    // MARK: Multiple wildcards
+
+    @Test func multipleWildcardsMatch() {
+        #expect(WildcardMatcher.matches(
+            text: "Cypress Hill - Insane in the Brain",
+            pattern: "*Hill*Brain*"
+        ))
+    }
+
+    // MARK: Edge cases
+
+    @Test func emptyPatternMatchesAll() {
+        #expect(WildcardMatcher.matches(text: "anything", pattern: ""))
+    }
+
+    @Test func singleWildcardMatchesAll() {
+        #expect(WildcardMatcher.matches(text: "anything at all", pattern: "*"))
+    }
+
+    @Test func noMatchReturnsFalse() {
+        #expect(!WildcardMatcher.matches(text: "DJ Hazard", pattern: "Noisia"))
+    }
+
+    @Test func wildcardNoMatchReturnsFalse() {
+        #expect(!WildcardMatcher.matches(text: "DJ Hazard", pattern: "Noisia*Bass"))
+    }
+
+    @Test func wildcardIsAnchored() {
+        // With a wildcard present, matching is anchored: "Track*" should NOT match "My Track Name"
+        #expect(!WildcardMatcher.matches(text: "My Track Name", pattern: "Track*"))
+    }
+
+    @Test func specialRegexCharsAreEscaped() {
+        #expect(WildcardMatcher.matches(text: "Track (Remix)", pattern: "*Remix)"))
+    }
+}
+
+// MARK: - ScanResultTableItem Tests
+
+@Suite("ScanResultTableItem")
+struct ScanResultTableItemTests {
+
+    private func makeScanResult(
+        id: String = "1",
+        title: String = "Some Title",
+        artist: String = "Some Artist",
+        album: String? = "Some Album",
+        issues: [TagIssue] = []
+    ) -> ScanResult {
+        ScanResult(
+            id: MusicItemID(id),
+            title: title,
+            artistName: artist,
+            albumTitle: album,
+            issues: issues
+        )
+    }
+
+    @Test func initFromUncorrectedScanResult() {
+        let sr = makeScanResult(title: "My Song", artist: "My Artist", album: "My Album")
+        let item = ScanResultTableItem(scanResult: sr, isCorrected: false)
+        #expect(item.title == "My Song")
+        #expect(item.artistName == "My Artist")
+        #expect(item.albumTitle == "My Album")
+        #expect(!item.isCorrected)
+    }
+
+    @Test func initFromCorrectedScanResult() {
+        let sr = makeScanResult()
+        let item = ScanResultTableItem(scanResult: sr, isCorrected: true)
+        #expect(item.isCorrected)
+    }
+
+    @Test func alertCountReflectsIssueCount() {
+        let sr = makeScanResult(issues: [.dashSeparator, .underscoresAsSpaces, .fileExtension])
+        let item = ScanResultTableItem(scanResult: sr, isCorrected: false)
+        #expect(item.alertCount == 3)
+    }
+
+    @Test func alertCountZeroWhenNoIssues() {
+        let sr = makeScanResult(issues: [])
+        let item = ScanResultTableItem(scanResult: sr, isCorrected: false)
+        #expect(item.alertCount == 0)
+    }
+
+    @Test func correctionSortValueForCorrected() {
+        let sr = makeScanResult()
+        let item = ScanResultTableItem(scanResult: sr, isCorrected: true)
+        #expect(item.correctionSortValue == 1)
+    }
+
+    @Test func correctionSortValueForUncorrected() {
+        let sr = makeScanResult()
+        let item = ScanResultTableItem(scanResult: sr, isCorrected: false)
+        #expect(item.correctionSortValue == 0)
+    }
+
+    @Test func nilAlbumDefaultsToEmptyString() {
+        let sr = makeScanResult(album: nil)
+        let item = ScanResultTableItem(scanResult: sr, isCorrected: false)
+        #expect(item.albumTitle == "")
+    }
+
+    @Test func identifiableUsesScanResultID() {
+        let sr = makeScanResult(id: "abc123")
+        let item = ScanResultTableItem(scanResult: sr, isCorrected: false)
+        #expect(item.id == MusicItemID("abc123"))
+    }
+}
+
+// MARK: - ResultsFilter Tests
+
+@Suite("ResultsFilter")
+struct ResultsFilterTests {
+
+    // MARK: - Test Helpers
+
+    private func makeItem(
+        id: String = "1",
+        title: String = "Some Title",
+        artist: String = "Some Artist",
+        album: String? = "Some Album",
+        issues: [TagIssue] = [],
+        isCorrected: Bool = false
+    ) -> ScanResultTableItem {
+        ScanResultTableItem(
+            scanResult: ScanResult(
+                id: MusicItemID(id),
+                title: title,
+                artistName: artist,
+                albumTitle: album,
+                issues: issues
+            ),
+            isCorrected: isCorrected
+        )
+    }
+
+    // MARK: - Title filter
+
+    @Test func titleFilterSubstringMatch() {
+        let items = [makeItem(title: "DJ Hazard Mix"), makeItem(id: "2", title: "Other Song")]
+        var filter = ResultsFilter()
+        filter.titleEnabled = true
+        filter.titlePattern = "Hazard"
+        let result = filter.apply(to: items)
+        #expect(result.count == 1)
+        #expect(result.first?.title == "DJ Hazard Mix")
+    }
+
+    @Test func titleFilterWildcardMatch() {
+        let items = [makeItem(title: "DJ Hazard Mix"), makeItem(id: "2", title: "Other Song")]
+        var filter = ResultsFilter()
+        filter.titleEnabled = true
+        filter.titlePattern = "DJ*Mix"
+        let result = filter.apply(to: items)
+        #expect(result.count == 1)
+        #expect(result.first?.title == "DJ Hazard Mix")
+    }
+
+    @Test func titleFilterDisabledPassesAll() {
+        let items = [makeItem(title: "A"), makeItem(id: "2", title: "B")]
+        var filter = ResultsFilter()
+        filter.titleEnabled = false
+        filter.titlePattern = "A"
+        let result = filter.apply(to: items)
+        #expect(result.count == 2)
+    }
+
+    // MARK: - Artist filter
+
+    @Test func artistFilterSubstringMatch() {
+        let items = [makeItem(artist: "DJ Hazard"), makeItem(id: "2", artist: "Noisia")]
+        var filter = ResultsFilter()
+        filter.artistEnabled = true
+        filter.artistPattern = "Hazard"
+        let result = filter.apply(to: items)
+        #expect(result.count == 1)
+        #expect(result.first?.artistName == "DJ Hazard")
+    }
+
+    @Test func artistFilterWildcardMatch() {
+        let items = [makeItem(artist: "DJ Hazard"), makeItem(id: "2", artist: "Noisia")]
+        var filter = ResultsFilter()
+        filter.artistEnabled = true
+        filter.artistPattern = "DJ*"
+        let result = filter.apply(to: items)
+        #expect(result.count == 1)
+    }
+
+    // MARK: - Album filter
+
+    @Test func albumFilterSubstringMatch() {
+        let items = [makeItem(album: "Smooth Jazz Hits"), makeItem(id: "2", album: "Rock Classics")]
+        var filter = ResultsFilter()
+        filter.albumEnabled = true
+        filter.albumPattern = "jazz"
+        let result = filter.apply(to: items)
+        #expect(result.count == 1)
+        #expect(result.first?.albumTitle == "Smooth Jazz Hits")
+    }
+
+    @Test func albumFilterWildcardMatch() {
+        let items = [makeItem(album: "Smooth Jazz Hits"), makeItem(id: "2", album: "Rock Classics")]
+        var filter = ResultsFilter()
+        filter.albumEnabled = true
+        filter.albumPattern = "*Jazz*"
+        let result = filter.apply(to: items)
+        #expect(result.count == 1)
+    }
+
+    @Test func albumFilterHandlesEmptyAlbum() {
+        let items = [makeItem(album: nil), makeItem(id: "2", album: "Some Album")]
+        var filter = ResultsFilter()
+        filter.albumEnabled = true
+        filter.albumPattern = "Some"
+        let result = filter.apply(to: items)
+        #expect(result.count == 1)
+        #expect(result.first?.albumTitle == "Some Album")
+    }
+
+    // MARK: - Alert filter
+
+    @Test func alertFilterIncludesMatchingIssues() {
+        let items = [
+            makeItem(id: "1", issues: [.dashSeparator]),
+            makeItem(id: "2", issues: [.fileExtension]),
+            makeItem(id: "3", issues: [])
+        ]
+        var filter = ResultsFilter()
+        filter.alertsEnabled = true
+        filter.selectedAlerts = [.dashSeparator]
+        let result = filter.apply(to: items)
+        #expect(result.count == 1)
+        #expect(result.first?.id == MusicItemID("1"))
+    }
+
+    @Test func alertFilterExcludesNonMatchingIssues() {
+        let items = [makeItem(issues: [.fileExtension])]
+        var filter = ResultsFilter()
+        filter.alertsEnabled = true
+        filter.selectedAlerts = [.dashSeparator]
+        let result = filter.apply(to: items)
+        #expect(result.isEmpty)
+    }
+
+    @Test func alertFilterMatchesAnySelectedIssue() {
+        // OR logic: item matches if it has ANY of the selected alerts
+        let items = [
+            makeItem(id: "1", issues: [.dashSeparator]),
+            makeItem(id: "2", issues: [.fileExtension]),
+            makeItem(id: "3", issues: [.underscoresAsSpaces])
+        ]
+        var filter = ResultsFilter()
+        filter.alertsEnabled = true
+        filter.selectedAlerts = [.dashSeparator, .fileExtension]
+        let result = filter.apply(to: items)
+        #expect(result.count == 2)
+    }
+
+    @Test func alertFilterDisabledPassesAll() {
+        let items = [makeItem(id: "1", issues: [.dashSeparator]), makeItem(id: "2", issues: [])]
+        var filter = ResultsFilter()
+        filter.alertsEnabled = false
+        filter.selectedAlerts = [.dashSeparator]
+        let result = filter.apply(to: items)
+        #expect(result.count == 2)
+    }
+
+    // MARK: - Correction status filter
+
+    @Test func correctionStatusFilterCorrectedOnly() {
+        let items = [
+            makeItem(id: "1", isCorrected: true),
+            makeItem(id: "2", isCorrected: false)
+        ]
+        var filter = ResultsFilter()
+        filter.correctionStatusEnabled = true
+        filter.correctionStatus = .corrected
+        let result = filter.apply(to: items)
+        #expect(result.count == 1)
+        #expect(result.first?.isCorrected == true)
+    }
+
+    @Test func correctionStatusFilterNeedsCorrectionOnly() {
+        let items = [
+            makeItem(id: "1", isCorrected: true),
+            makeItem(id: "2", isCorrected: false)
+        ]
+        var filter = ResultsFilter()
+        filter.correctionStatusEnabled = true
+        filter.correctionStatus = .needsCorrection
+        let result = filter.apply(to: items)
+        #expect(result.count == 1)
+        #expect(result.first?.isCorrected == false)
+    }
+
+    @Test func correctionStatusAllPassesAll() {
+        let items = [
+            makeItem(id: "1", isCorrected: true),
+            makeItem(id: "2", isCorrected: false)
+        ]
+        var filter = ResultsFilter()
+        filter.correctionStatusEnabled = true
+        filter.correctionStatus = .all
+        let result = filter.apply(to: items)
+        #expect(result.count == 2)
+    }
+
+    @Test func correctionStatusDisabledPassesAll() {
+        let items = [
+            makeItem(id: "1", isCorrected: true),
+            makeItem(id: "2", isCorrected: false)
+        ]
+        var filter = ResultsFilter()
+        filter.correctionStatusEnabled = false
+        filter.correctionStatus = .corrected
+        let result = filter.apply(to: items)
+        #expect(result.count == 2)
+    }
+
+    // MARK: - Combined filters (AND logic)
+
+    @Test func multipleFiltersApplyAsAND() {
+        let items = [
+            makeItem(id: "1", title: "monk_fish", artist: "DJ Hazard", issues: [.dashSeparator]),
+            makeItem(id: "2", title: "monk_fish", artist: "Noisia", issues: [.dashSeparator]),
+            makeItem(id: "3", title: "Other", artist: "DJ Hazard", issues: [.fileExtension])
+        ]
+        var filter = ResultsFilter()
+        filter.titleEnabled = true
+        filter.titlePattern = "monk"
+        filter.artistEnabled = true
+        filter.artistPattern = "Hazard"
+        let result = filter.apply(to: items)
+        #expect(result.count == 1)
+        #expect(result.first?.id == MusicItemID("1"))
+    }
+
+    @Test func allFiltersDisabledPassesAll() {
+        let items = [makeItem(id: "1"), makeItem(id: "2"), makeItem(id: "3")]
+        let filter = ResultsFilter()
+        let result = filter.apply(to: items)
+        #expect(result.count == 3)
+    }
+
+    // MARK: - clear()
+
+    @Test func clearResetsAllFilters() {
+        var filter = ResultsFilter()
+        filter.titleEnabled = true
+        filter.titlePattern = "test"
+        filter.artistEnabled = true
+        filter.artistPattern = "artist"
+        filter.alertsEnabled = true
+        filter.selectedAlerts = [.dashSeparator]
+        filter.correctionStatusEnabled = true
+        filter.correctionStatus = .corrected
+
+        filter.clear()
+
+        #expect(filter == ResultsFilter())
+    }
+
+    // MARK: - isActive
+
+    @Test func isActiveWhenNoFiltersEnabled() {
+        let filter = ResultsFilter()
+        #expect(!filter.isActive)
+    }
+
+    @Test func isActiveWhenTitleEnabled() {
+        var filter = ResultsFilter()
+        filter.titleEnabled = true
+        filter.titlePattern = "something"
+        #expect(filter.isActive)
+    }
+
+    @Test func isActiveWhenOnlyAlertsEnabled() {
+        var filter = ResultsFilter()
+        filter.alertsEnabled = true
+        filter.selectedAlerts = [.dashSeparator]
+        #expect(filter.isActive)
+    }
+
+    @Test func isActiveWhenCorrectionStatusEnabled() {
+        var filter = ResultsFilter()
+        filter.correctionStatusEnabled = true
+        filter.correctionStatus = .corrected
+        #expect(filter.isActive)
+    }
+
+    // MARK: - Bug 0003: clear() guarantees inactive filter with no filtering effect
+
+    @Test func clearMakesActiveFilterInactiveAndPassesAllItems() {
+        var filter = ResultsFilter()
+        filter.titleEnabled = true
+        filter.titlePattern = "NonExistent"
+        filter.artistEnabled = true
+        filter.artistPattern = "Nobody"
+        filter.alertsEnabled = true
+        filter.selectedAlerts = [.dashSeparator]
+        filter.correctionStatusEnabled = true
+        filter.correctionStatus = .corrected
+
+        #expect(filter.isActive)
+
+        let items = [
+            ScanResultTableItem(
+                scanResult: ScanResult(id: MusicItemID("b1"), title: "Track", artistName: "Artist", albumTitle: "Album", issues: [.underscoresAsSpaces]),
+                isCorrected: false
+            )
+        ]
+
+        // Active filter excludes all items
+        #expect(filter.apply(to: items).isEmpty)
+
+        filter.clear()
+
+        // After clear: filter is inactive and passes all items through
+        #expect(!filter.isActive)
+        #expect(filter.apply(to: items).count == items.count)
+    }
+}
+
